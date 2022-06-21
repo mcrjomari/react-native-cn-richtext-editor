@@ -62,7 +62,7 @@ export default class CNEditor extends Component {
             styles.push("green");
           } else if (colorHex == styleList["default"].color) {
             styles.push("#737373");
-          } else {
+          } else {  
             const getAllHex = Object.values(styleList).filter(item =>
               item.color.startsWith("#")
             );
@@ -121,9 +121,19 @@ export default class CNEditor extends Component {
           break;
 
         case "onChange":
+          this.onChangeTopPosition(message.topPosition, message.height);
+          this.onChangeHeight(message.height);
           this.onValueChanged(message.data);
           break;
-
+        case "selectionChange":
+          this.onChangeTopPosition(message.topPosition, message.clientHeight);
+          break;
+        case "onResize":
+            this.onChangeHeight(message.height);
+            break;
+        case "onFocus":
+          this.onChangeHeight(message.height);
+          this.onFocus(message.focus);
           break;
         default:
           break;
@@ -223,27 +233,45 @@ export default class CNEditor extends Component {
 
     const jsonString = JSON.stringify({ type: "editor", command: "focus" });
     const origBody = JSON.stringify({ type: "toolbar", command: "body" });
+    const resizeBody = JSON.stringify({ type: "editor", command: "resize" });
 
     if (this.webViewRef) {
-      if (isIos) {
-        setTimeout(() => {
-          this.webViewRef.postMessage(jsonString);
-          this.webViewRef.postMessage(jsonString);
-          this.webViewRef.postMessage(origBody);
-        }, 100);
-      } else {
-        setTimeout(() => {
-          this.webViewRef.requestFocus();
-          this.webViewRef.requestFocus();
-          this.webViewRef.postMessage(origBody);
-        }, 100);
+      try{
+        if (isIos) {
+          setTimeout(() => {
+            this.webViewRef?.postMessage(origBody);
+            this.webViewRef?.postMessage(resizeBody);
+          }, 100);
+        } else {
+          setTimeout(() => {
+            // this.webViewRef.requestFocus();
+            // this.webViewRef.requestFocus();
+            this.webViewRef?.postMessage(origBody);
+            this.webViewRef?.postMessage(resizeBody);
+          }, 100);
+        }  
+      }catch(err){
+        
       }
+      
     }
   };
 
+  clearValue = () => {
+    const jsonString = JSON.stringify({
+      type: "editor",
+      command: "setHtml",
+      value: ''
+    });
+
+    if (this.webViewRef) {
+      this.webViewRef.postMessage(jsonString);
+    }
+
+  }
+
   onLayout = event => {
     const { width } = event.nativeEvent.layout;
-
     this.setState({
       layoutWidth: width
     });
@@ -279,13 +307,12 @@ export default class CNEditor extends Component {
       jsonString = JSON.stringify({ type: "toolbar", command: tool });
     }
 
-    console.log({ jsonString }, styleList[tool]);
     if (this.webViewRef) {
       const jsonStringFocus = JSON.stringify({
         type: "editor",
         command: "focus"
       });
-      this.webViewRef.postMessage(jsonStringFocus);
+      // this.webViewRef.postMessage(jsonStringFocus);
       this.webViewRef.postMessage(jsonString);
     }
   };
@@ -327,6 +354,18 @@ export default class CNEditor extends Component {
       this.props.onValueChanged(data);
     }
   };
+  
+  onChangeTopPosition = (topPosition, editorOffsetHeight) => {
+    if(this.props.onChangeTopPosition) this.props.onChangeTopPosition(topPosition, editorOffsetHeight);    
+  }
+
+  onChangeHeight = height => {
+    if(this.props.onChangeSize) this.props.onChangeSize(height);
+  }
+
+  onFocus = (value) => {
+    if(this.props.onFocus) this.props.onFocus(value);
+  }
 
   applyEditorStyle = styleString => {
     const jsonString = JSON.stringify({
@@ -371,7 +410,7 @@ export default class CNEditor extends Component {
     const htmlEditorString = htmlEditor.replace(
       "/* PUT YOUR STYLE HERE */",
       customStyles
-    );
+    ).replace('initial-scale=1.0">', 'initial-scale=1.0 user-scalable=no">') ;
     return (
       <View style={styles.container} onLayout={this.onLayout}>
         <WebView
@@ -385,12 +424,15 @@ export default class CNEditor extends Component {
           keyboardDisplayRequiresUserAction={keyboardDisplayRequiresUserAction}
           javaScriptEnabled={true}
           source={{ html: htmlEditorString }}
-          domStorageEnabled={true}
           mixedContentMode="always"
           onMessage={this.onMessage}
           renderError={error => console.log("error:", error)}
-          autoFocus={true}
+          autoFocus={false}
           javaScriptEnabledAndroid={true}
+          hideKeyboardAccessoryView
+          automaticallyAdjustContentInsets={false}
+          scrollEnabled={false}
+          onLoadEnd={this.handleLoadEnd}
         />
       </View>
     );
@@ -399,7 +441,8 @@ export default class CNEditor extends Component {
 
 let styles = StyleSheet.create({
   container: {
-    flex: 1
+    flex: 1,
+    flexGrow: 1
   },
   webView: {
     flexGrow: 1
